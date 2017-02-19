@@ -10,7 +10,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 class StreamsBasicsSuite extends FunSuite {
-  test("Smote test"){
+  test("Smoke test"){
     assert(true)
   }
 
@@ -178,4 +178,5 @@ class StreamsBasicsSuite extends FunSuite {
     assert(res == resultadoEsperado)
 
   }
+
 }
