@@ -137,4 +137,45 @@ class StreamsBasicsSuite extends FunSuite {
     val valorEsperado = (1+1)+(2+1)+(3+1)+(4+1)+(5+1)+(6+1)+(7+1)+(8+1)+(9+1)+(10+1)
     assert(res == valorEsperado)
   }
+
+  test("A un Sink le puede anteceder un Flow y sigue siendo Sink"){
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
+    var t = 0
+    val source = Source(1 to 10)
+    val sink: Sink[Int, Future[Done]] = Sink.foreach(t+=_)
+    val flow: Flow[Int, Int, NotUsed] = Flow[Int].map(_+1)
+    /*La unica manera para que un flow pueda ir a sink y quedar en Sink
+    * es que el Sink no sea materializado. Por ahora el unico Sink
+    * que podemos obtener sin ser materializado es con Sink.foreach
+    * pero posteriormente veremos como esto tiene sentido cuando los datos
+    * de un stream van a un Actor.*/
+    val newSink: Sink[Int, NotUsed] = flow.to(sink)
+    val resFut = source.runWith(newSink)
+    /*En este caso tampoco podemos verificar nada con nuestro stream mas alla
+    * que compile y tenga sentido que FLow + Sink = Sink*/
+    assert(true)
+  }
+
+  test("Se pueden declarar flujos desde funciones normales"){
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+    def plusOne(i:Int):Int = i +1
+    def twice(i:Int):Int = i * 2
+    val flowPlusOne: Flow[Int, Int, NotUsed] = Flow.fromFunction(plusOne)
+    val flowTwice: Flow[Int, Int, NotUsed] = Flow.fromFunction(twice)
+
+    val resFut: Future[Int] = Source(1 to 3)
+      .via(flowPlusOne)
+      .via(flowTwice)
+      .runWith(Sink.fold(0)(_+_))
+
+    val res = Await.result(resFut, Duration.Inf)
+
+    val resultadoEsperado = ((1+1)*2)+((2+1)*2)+((3+1)*2)
+
+    assert(res == resultadoEsperado)
+
+  }
 }
