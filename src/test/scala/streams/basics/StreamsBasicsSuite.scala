@@ -85,4 +85,30 @@ class StreamsBasicsSuite extends FunSuite {
     val res2 = Await.result(resFut2, Duration.Inf)
     assert(res2 == valorEsperado)
   }
+
+  test("Un source es inmutable"){
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
+    val source1: Source[Int, NotUsed] = Source(1 to 10)
+    /*Como en collections, esta transformacion de source se pierde
+    * pues no se asigna el resultado de la evaluacion a un val nuevo
+    * y source sigue siendo el flujo original de 1 a 10*/
+    source1.map(x=>0)
+    val source2: Source[Int, NotUsed] = source1.map(x => 0)
+    val sink: Sink[Int, Future[Int]] = Sink.fold(0)(_+_)
+
+    val valorEsperado = 1+2+3+4+5+6+7+8+9+10
+
+    val resFut1 = source1.runWith(sink)
+    val resFut2 = source2.runWith(sink)
+
+    val res1 = Await.result(resFut1, Duration.Inf)
+    val res2 = Await.result(resFut2, Duration.Inf)
+
+    assert(res1 == valorEsperado)
+    assert(res1 != res2)
+    assert(res2 == 0)
+
+  }
 }
