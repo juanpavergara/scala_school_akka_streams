@@ -42,5 +42,13 @@ class FlowSuite extends FunSuite {
 
   }
 
+  test("Se puede ejecutar un grafo a partir de flow indicando el Source y el Sink"){
+    val flow1 = Flow[Int].map(_*2)
+    /*runWith en un Flow entrega como resultado una tupla con la materizalizacion del Source y del Sink*/
+    val res: (NotUsed, Future[Int]) = flow1.runWith(source, sink)
+    val r = Await.result(res._2, Duration.Inf)
+    assert(r == 110)
+  }
+
 
 }

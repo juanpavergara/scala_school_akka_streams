@@ -32,8 +32,7 @@ class StreamsBasicsSuite extends FunSuite {
     /*Un grafo se materializa con run. Es importante ver que para poder ejecutar un grafo siempre hay que proveer
     ActorSystem y un ActorMaterializer de forma implicita
     */
-    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
-    implicit val materializer = ActorMaterializer()
+
     val res: NotUsed = g.run()
     /*Este test solo demuestra que es lo minimo necesario para construir un
     grafo que compile. Dado que el Sink es ignore no podemos realizar
@@ -123,7 +122,7 @@ class StreamsBasicsSuite extends FunSuite {
     * En este caso, ante un Int se entrega otro Int correspondiente al que
     * ingresa incrementado en 1.
     * La semantica de Flow[Int, Int, NotUsed] es: Un flow que dado un Int, entrega un Int
-    * y no ha sido materializado*/
+    * y "no importa" lo que suceda con la materializacion (ver la documentacion de NotUsed)*/
     val flow: Flow[Int, Int, NotUsed] = Flow[Int].map(_+1)
 
     /*A un source se le puede "pegar" un flow y el resultado es un Source pues ellos
