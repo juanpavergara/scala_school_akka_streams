@@ -50,5 +50,32 @@ class FlowSuite extends FunSuite {
     assert(r == 110)
   }
 
+  test("Se pueden unir dos flujos y quedar en un solo Flujo"){
+
+    def serialize(i:Int) = i.toString
+    def concatQuestionMark(s:String) = s"${s}?"
+
+    def flow1 = Flow.fromFunction(serialize)
+    def flow2 = Flow.fromFunction(concatQuestionMark)
+
+    /*Notar como resulta un flujo que recibe entero y bota String*/
+    def flow3: Flow[Int, String, NotUsed] = Flow[Int].via(flow1).via(flow2)
+
+    val sinkString: Sink[String, Future[String]] = Sink.fold("")(_+_)
+
+    /*El siguiente grafo materializado no compila porque sink recibe Ints y flow3 recibe Int y arroja String*/
+    assertDoesNotCompile("source via flow3 runWith sink")
+
+    val resF: Future[String] = source via flow3 runWith sinkString
+
+    val res = Await.result(resF, Duration.Inf)
+
+    println(res)
+    val resEsperado = "1?2?3?4?5?6?7?8?9?10?"
+
+    assert(res == resEsperado)
+
+  }
+
 
 }

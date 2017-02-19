@@ -15,6 +15,10 @@ class StreamsBasicsSuite extends FunSuite {
   }
 
   test("Se puede construir un Source a partir de un Iterable cualquiera"){
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
     /*Se puede crear un Source con su apply por defecto que toma un Iterable.
     El NotUsed significa que es un Source no materializado aun
     */
