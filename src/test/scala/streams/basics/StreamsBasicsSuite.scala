@@ -3,7 +3,7 @@ package streams.basics
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.{Done, NotUsed}
-import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl._
 import org.scalatest.FunSuite
 
 import scala.concurrent.duration.Duration
@@ -110,5 +110,31 @@ class StreamsBasicsSuite extends FunSuite {
     assert(res1 != res2)
     assert(res2 == 0)
 
+  }
+
+  test("Un Source puede ser compuesto con un Flow y siguen siendo Source"){
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
+    /*El ya conocido Source*/
+    val source: Source[Int, NotUsed] = Source(1 to 10)
+    /*Esto es nuevo. Es un flow. La semantica de
+    * Flow[Int] es: cuando tenga un Int hare con el lo siguiente ...
+    * En este caso, ante un Int se entrega otro Int correspondiente al que
+    * ingresa incrementado en 1.
+    * La semantica de Flow[Int, Int, NotUsed] es: Un flow que dado un Int, entrega un Int
+    * y no ha sido materializado*/
+    val flow: Flow[Int, Int, NotUsed] = Flow[Int].map(_+1)
+
+    /*A un source se le puede "pegar" un flow y el resultado es un Source pues ellos
+    * dos juntos generan una nueva fuente de datos.
+    * A un Source se le anaden flujos con el operador via.*/
+    val newSource: Source[Int, NotUsed] = source.via(flow)
+
+    val sink: Sink[Int, Future[Int]] = Sink.fold(0)(_+_)
+    val resFut = newSource.runWith(sink)
+    val res = Await.result(resFut, Duration.Inf)
+    val valorEsperado = (1+1)+(2+1)+(3+1)+(4+1)+(5+1)+(6+1)+(7+1)+(8+1)+(9+1)+(10+1)
+    assert(res == valorEsperado)
   }
 }
