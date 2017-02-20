@@ -1,10 +1,13 @@
 package streams.basics
 
+import java.nio.charset.StandardCharsets.UTF_8
+
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import org.scalatest.FunSuite
 import akka.stream.scaladsl._
+import akka.util.ByteString
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -67,13 +70,44 @@ class FlowSuite extends FunSuite {
     assertDoesNotCompile("source via flow3 runWith sink")
 
     val resF: Future[String] = source via flow3 runWith sinkString
-
     val res = Await.result(resF, Duration.Inf)
-
-    println(res)
     val resEsperado = "1?2?3?4?5?6?7?8?9?10?"
 
     assert(res == resEsperado)
+
+  }
+
+  test("Un Flow se puede join con un BidiFlow"){
+
+    val deserialize:Int => String = i => {println(s"Deserializing ${i}");s"Msg size is: ${i.toString()}"}
+    val countCharacters:String => Int = message => {println(s"Counting chars for ${message}");message.size}
+
+    val incoming:Flow[Int, String, _] = Flow fromFunction deserialize
+    val outgoing:Flow[String, Int, _] = Flow fromFunction countCharacters
+
+    val bidiflow: BidiFlow[Int, String, String, Int, NotUsed] = BidiFlow.fromFlows(incoming, outgoing)
+
+    /*
+    * Con el join el flujo queda de la siuiente forma:
+    *
+    * +-------------------------------+
+    * | Resulting Flow                |
+    * |                               |
+    * | +------+            +------+  |
+    * | |      | ~~666+1~~> |      | ~~> "Msg size is: 667"
+    * | | flow |            | bidi |  |
+    * | |      | <~~~ 1 ~~~ |      | <~~ "a"
+    * | +------+            +------+  |
+    * +-------------------------------+
+    *
+    * */
+    val flow: Flow[String, String, NotUsed] = Flow[Int].map(_+666).join(bidiflow)
+
+    val resF = Source(List("a")) via flow runWith Sink.fold("")(_+_)
+
+    val res = Await.result(resF, Duration.Inf)
+
+    println(s"res: ${res}")
 
   }
 
