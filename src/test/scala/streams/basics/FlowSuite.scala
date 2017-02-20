@@ -79,8 +79,8 @@ class FlowSuite extends FunSuite {
 
   test("Un Flow se puede join con un BidiFlow"){
 
-    val deserialize:Int => String = i => {println(s"Deserializing ${i}");s"Msg size is: ${i.toString()}"}
-    val countCharacters:String => Int = message => {println(s"Counting chars for ${message}");message.size}
+    val deserialize:Int => String = i => s"Msg size is: ${i.toString()}"
+    val countCharacters:String => Int = message => message.size
 
     val incoming:Flow[Int, String, _] = Flow fromFunction deserialize
     val outgoing:Flow[String, Int, _] = Flow fromFunction countCharacters
@@ -96,7 +96,7 @@ class FlowSuite extends FunSuite {
     * | +------+            +------+  |
     * | |      | ~~666+1~~> |      | ~~> "Msg size is: 667"
     * | | flow |            | bidi |  |
-    * | |      | <~~~ 1 ~~~ |      | <~~ "a"
+    * | |      | <~~~ 1 ~~~ |      | <~~ "a" (Este es el I2 de un bidi normal y puede ser confuso entenderlo)
     * | +------+            +------+  |
     * +-------------------------------+
     *
