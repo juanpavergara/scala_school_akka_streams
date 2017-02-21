@@ -82,8 +82,8 @@ class FlowSuite extends FunSuite {
     val deserialize:Int => String = i => s"Msg size is: ${i.toString()}"
     val countCharacters:String => Int = message => message.size
 
-    val incoming:Flow[Int, String, _] = Flow fromFunction deserialize
-    val outgoing:Flow[String, Int, _] = Flow fromFunction countCharacters
+    val incoming:Flow[Int, String, NotUsed] = Flow fromFunction deserialize
+    val outgoing:Flow[String, Int, NotUsed] = Flow fromFunction countCharacters
 
     val bidiflow: BidiFlow[Int, String, String, Int, NotUsed] = BidiFlow.fromFlows(incoming, outgoing)
 
@@ -107,7 +107,26 @@ class FlowSuite extends FunSuite {
 
     val res = Await.result(resF, Duration.Inf)
 
-    println(s"res: ${res}")
+    assert(res == "Msg size is: 667")
+
+  }
+
+  test("Se puede usar encadenamiento de flujos en lugar de Flow.join(bidi) "){
+    val deserialize:Int => String = i => s"Msg size is: ${i.toString()}"
+    val countCharacters:String => Int = message => message.size
+
+    val incoming:Flow[Int, String, NotUsed] = Flow fromFunction deserialize
+    val outgoing:Flow[String, Int, NotUsed] = Flow fromFunction countCharacters
+
+    val flow = Flow[Int].map(_+666)
+
+    val newFlow: Flow[String, String, NotUsed] = outgoing via flow via incoming
+
+    val resF = Source(List("a")) via newFlow runWith Sink.fold("")(_+_)
+
+    val res = Await.result(resF, Duration.Inf)
+
+    assert(res == "Msg size is: 667")
 
   }
 
