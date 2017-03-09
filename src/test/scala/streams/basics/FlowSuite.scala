@@ -130,5 +130,17 @@ class FlowSuite extends FunSuite {
 
   }
 
+  test("Que mas hay en Flow?"){
+    val flow1 = Flow[Int].map(_+1)
+    val flow2 = flow1.merge(Source(30 to 40))
+    val flow3 = flow2.merge(Source(50 to 60))
+
+    val resF = source via flow3 to Sink.foreach(println)
+
+    await(resF)
+
+
+  }
+
 
 }
