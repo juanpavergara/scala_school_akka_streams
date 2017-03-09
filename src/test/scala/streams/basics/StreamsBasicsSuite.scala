@@ -7,7 +7,7 @@ import akka.stream.scaladsl._
 import org.scalatest.FunSuite
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, Future, Promise}
 
 class StreamsBasicsSuite extends FunSuite {
   test("Smoke test"){
@@ -20,7 +20,7 @@ class StreamsBasicsSuite extends FunSuite {
     implicit val materializer = ActorMaterializer()
 
     /*Se puede crear un Source con su apply por defecto que toma un Iterable.
-    El NotUsed significa que es un Source no materializado aun
+    El NotUsed significa que el Source no se materializa a un valor.
     */
     val source: Source[Int, NotUsed] = Source(1 to 10)
     /*Como estamos probando un Source vamos por ahora a hacer un flujo de datos
@@ -42,6 +42,40 @@ class StreamsBasicsSuite extends FunSuite {
     grafo que compile. Dado que el Sink es ignore no podemos realizar
     ninguna verificacion
     */
+    assert(true)
+  }
+
+  test("Se puede construir un Source que materializa a un valor"){
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
+    /*Se puede crear un Source con su apply por defecto que toma un Iterable.
+  El NotUsed significa que el Source no se materializa a un valor.
+    */
+    val source2: Source[Int, String] = Source.fromGraph(new SourceStageTest())
+    /*Como estamos probando un Source vamos por ahora a hacer un flujo de datos
+    que arranca en source y se va a un Sink que ignora los datos. Debemos entocnes
+    crear el sink para luego unirlo con el source.
+    */
+    val sink: Sink[Any, Future[Done]] = Sink.foreach(println)
+    /*Un source se debe unir a un sink para luego poder ejecutarse. Notar como
+    el tipo de source.to(sink) es un grafo y que adicionalmente esta parametrizado a NotUsed
+    pues se trata simplemente de la descripcion de un flujo y no su ejecucion (aka su materializacion)
+    */
+    val g: RunnableGraph[String] = source2.toMat(sink)(Keep.left)
+    /*Un grafo se materializa con run. Es importante ver que para poder ejecutar un grafo siempre hay que proveer
+    ActorSystem y un ActorMaterializer de forma implicita
+    */
+
+    val res = g.run()
+    println("MATERIALIZED => " + res)
+    /*Este test solo demuestra que es lo minimo necesario para construir un
+    grafo que compile. Dado que el Sink es ignore no podemos realizar
+    ninguna verificacion
+
+    */
+
     assert(true)
   }
 

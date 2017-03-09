@@ -1,0 +1,6 @@
+.ensime
+target/
+.idea/
+.ensime_cache/
+project/target/
+*.class
