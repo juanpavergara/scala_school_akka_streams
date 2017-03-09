@@ -1,6 +1,7 @@
-.ensime
-target/
-.idea/
-.ensime_cache/
-project/target/
-*.class
+/RUNNING_PID
+/logs/
+/project/*-shim.sbt
+/project/project/
+/project/target/
+/target/
+.idea
