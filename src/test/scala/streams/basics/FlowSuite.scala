@@ -7,6 +7,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import org.scalatest.FunSuite
 import akka.stream.scaladsl._
+import streams.TestUtils._
 import akka.util.ByteString
 
 import scala.concurrent.duration.Duration
@@ -122,25 +123,15 @@ class FlowSuite extends FunSuite {
 
     val newFlow: Flow[String, String, NotUsed] = outgoing via flow via incoming
 
-    val resF = Source(List("a")) via newFlow runWith Sink.fold("")(_+_)
+    val resF: Future[String] = Source(List("a")) via newFlow runWith Sink.fold("")(_+_)
 
-    val res = Await.result(resF, Duration.Inf)
+    val res = await(resF)
 
     assert(res == "Msg size is: 667")
 
   }
 
-  test("Que mas hay en Flow?"){
-    val flow1 = Flow[Int].map(_+1)
-    val flow2 = flow1.merge(Source(30 to 40))
-    val flow3 = flow2.merge(Source(50 to 60))
 
-    val resF = source via flow3 to Sink.foreach(println)
-
-    await(resF)
-
-
-  }
 
 
 }
