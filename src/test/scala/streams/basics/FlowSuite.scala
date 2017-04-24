@@ -1,17 +1,19 @@
 package streams.basics
 
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.concurrent.Executors
 
-import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.{Done, NotUsed}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Cancellable, Props}
 import akka.stream.ActorMaterializer
 import org.scalatest.FunSuite
 import akka.stream.scaladsl._
 import streams.TestUtils._
 import akka.util.ByteString
 
+import scala.collection.immutable.Range.Inclusive
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 class FlowSuite extends FunSuite {
 
@@ -128,8 +130,77 @@ class FlowSuite extends FunSuite {
     val res = await(resF)
 
     assert(res == "Msg size is: 667")
+  }
+
+  ignore("Testing how tick works"){
+    import scala.concurrent.duration._
+
+    def produceElements = Source(1 to 10 toList)
+    val s1: Source[Int, Cancellable] = Source.tick(0 seconds,3 seconds, 1)
+    val s2: Source[(Int, Int), Cancellable] = s1.zip(produceElements)
+
+    val s3: Source[Int, Cancellable] = s1.flatMapConcat(x=>produceElements)
+
+
+    s3.runWith(Sink.foreach{ e =>
+      println(e)
+      println("-----------------------------")
+    })
+  }
+
+  test("Source as protected state"){
+
+    import scala.concurrent.duration._
+    import User._
+    import RabbitMock._
+
+    class RabbitMock() extends Actor with ActorLogging{
+      override def receive = {
+        case m:Message => {
+          log.debug(s"RabbitMock procesando ${m.s}")
+        }
+      }
+    }
+
+    object RabbitMock{
+      case class Message(s:String)
+      def props() = {
+        Props(new RabbitMock())
+      }
+    }
+
+    class User(rabbitControl: ActorRef) extends Actor with ActorLogging {
+      implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
+
+      val schedule = context.system.scheduler.schedule(1 seconds, 1 seconds, self, Go())
+
+      def itemsSource = Source(1 to 10)
+      val itemsSink: Sink[Int, Future[Done]] = Sink.foreach(x => log.debug(s"$x"))
+      val intToMessageFlow = Flow[Int].map(i => Message(s"Numero $i"))
+      val rabbitSink = Sink.actorRef(rabbitControl, "rabbitControl")
+
+      val graph = itemsSource.via(intToMessageFlow).to(rabbitSink)
+
+      override def receive = {
+        case go:Go => {
+          graph.run
+        }
+      }
+    }
+
+    object User{
+      case class Go()
+      def props(rabbitControl: ActorRef) = {
+        Props(new User(rabbitControl))
+      }
+    }
+
+    val rabbitControl = system.actorOf(RabbitMock.props())
+    system.actorOf(User.props(rabbitControl), "demo")
+
 
   }
+
 
 
 
