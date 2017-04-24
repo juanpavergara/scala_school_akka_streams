@@ -151,7 +151,7 @@ class FlowSuite extends FunSuite {
   test("Source as protected state"){
 
     import scala.concurrent.duration._
-    import User._
+    import RecordReporter._
     import RabbitMock._
 
     class RabbitMock() extends Actor with ActorLogging{
@@ -169,7 +169,7 @@ class FlowSuite extends FunSuite {
       }
     }
 
-    class User(rabbitControl: ActorRef) extends Actor with ActorLogging {
+    class RecordReporter(rabbitControl: ActorRef) extends Actor with ActorLogging {
       implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
 
       val schedule = context.system.scheduler.schedule(1 seconds, 1 seconds, self, Go())
@@ -188,15 +188,15 @@ class FlowSuite extends FunSuite {
       }
     }
 
-    object User{
+    object RecordReporter{
       case class Go()
       def props(rabbitControl: ActorRef) = {
-        Props(new User(rabbitControl))
+        Props(new RecordReporter(rabbitControl))
       }
     }
 
     val rabbitControl = system.actorOf(RabbitMock.props())
-    system.actorOf(User.props(rabbitControl), "demo")
+    system.actorOf(RecordReporter.props(rabbitControl), "demo")
 
 
   }
