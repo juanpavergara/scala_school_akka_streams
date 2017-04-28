@@ -1,7 +1,7 @@
 package streams.basics
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl._
 import org.scalatest.FunSuite
@@ -214,6 +214,67 @@ class StreamsBasicsSuite extends FunSuite {
 
     assert(res == resultadoEsperado)
 
+  }
+
+  test("Se puede crear un Source desde un Future"){
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer()
+
+    def foo(i:Int)=i%2 match {
+      case 0 => Future(i)
+      case _ => Future.failed(new Exception("I don't like odds"))
+    }
+
+    //fromFuture obliga a que la materializacion sea NotUsed
+    val source: Source[Int, NotUsed] = Source fromFuture foo(0)
+
+    // este fold puede materializar a Future[Int]
+    val s: Sink[Int, Future[Int]] = Sink.fold(0)(_+_)
+
+    //runWith internamente es un toMat(Sink)(Keep.right) el cual conserva la materializacion de la derecha
+    val f1: Future[Int] = source.runWith(s)
+
+    // Si se hace a mano el toMat se debe escribir el Keep.right para que conserve la materializacion del Sink que es Future[Int]
+    val f2: Future[Int] = source.toMat(s)(Keep.right).run()
+
+    // Esta ejecucion no puede evaluar a Future[Int] pues to(Sink).run conserva la materializacion de la izquierda, la cual debe ser NotUsed pues es la del Source
+    val f3: NotUsed = source.to(s).run
+
+    val r1 = Await.result(f1, Duration.Inf)
+    val r2 = Await.result(f2, Duration.Inf)
+
+    assert(r1 == r2)
+    assert(r1 == 0)
+
+    // Y no puedes hacer nada con f3 porque es un NotUsed jajajajaja
+
+  }
+
+
+  test("Que pasa cuando un stream falla"){
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val decider: Supervision.Decider = {
+      case _: ArithmeticException => Supervision.Stop
+      case _                      => Supervision.Stop
+    }
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+    implicit val materializer = ActorMaterializer(
+      ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+
+    val source: Source[Int, NotUsed] = Source(0 to 5).map(100 / _)
+
+    val f: Future[Int] = source
+      .runWith(Sink.fold(0)(_ + _))
+      .recover{case e:Exception => 666}
+
+    val r = Await.result(f, Duration.Inf)
+
+    assert(r == 666)
   }
 
 }
