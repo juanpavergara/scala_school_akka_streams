@@ -1,12 +1,14 @@
 package streams.basics
 
-import akka.actor.ActorSystem
+import akka.actor._
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl._
+import akka.util.Timeout
 import org.scalatest.FunSuite
 
 import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
 
 class StreamsBasicsSuite extends FunSuite {
@@ -253,12 +255,12 @@ class StreamsBasicsSuite extends FunSuite {
   }
 
 
-  test("Que pasa cuando un stream falla"){
+  test("Que pasa cuando un stream falla [No future]"){
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val decider: Supervision.Decider = {
-      case _: ArithmeticException => Supervision.Stop
+      case _: ArithmeticException => Supervision.Resume
       case _                      => Supervision.Stop
     }
 
@@ -266,15 +268,142 @@ class StreamsBasicsSuite extends FunSuite {
     implicit val materializer = ActorMaterializer(
       ActorMaterializerSettings(system).withSupervisionStrategy(decider))
 
+    // Este source falla cuando el elemento sea 0.
+    // La estrategia de recuperacion Supervision.Resume dice que ante falla haga drop del caso (lo ignore)
+    // asi que esa excepcion se ignora y el source continua emitiendo
     val source: Source[Int, NotUsed] = Source(0 to 5).map(100 / _)
 
     val f: Future[Int] = source
       .runWith(Sink.fold(0)(_ + _))
-      .recover{case e:Exception => 666}
 
     val r = Await.result(f, Duration.Inf)
 
+    // 228 == (100/1) + (100/2) + (100/3) + (100/4) + (100/5) ... (100/0) falla y se ignora
+    // 228 == 100 + 50 + 33 + 25 + 20
+    // 228 == 228
+    assert(r == 228)
+  }
+
+  test("Que pasa cuando un stream falla [Con future]"){
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val decider: Supervision.Decider = {
+      case e: Exception => Supervision.Stop
+    }
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+
+    implicit val materializer = ActorMaterializer(
+      ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+
+    def foo(i:Int)=i%2 match {
+      case 0 => Future(i)
+      case _ => Future.failed(new IllegalStateException("I don't like odds"))
+    }
+
+    val source = Source.fromFuture(foo(1).recoverWith{
+      case e:IllegalStateException => Future(666)
+    })
+
+    val f: Future[Int] = source
+      .runWith(Sink.fold(0)(_ + _))
+
+    val r = Await.result(f, Duration.Inf)
+
+    /*
+    Si este assert pasa es porque hubo recuperacion en el stream con el recoverWith asi que el stream NO
+    se detuvo. Esto significa que la estrategia de recuperacion de `decider` no funciona
+    si el Source es fromFuture
+     */
     assert(r == 666)
+  }
+
+  test("Como funciona onComplete"){
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val decider: Supervision.Decider = {
+      case e: Exception => Supervision.Resume
+    }
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+
+    implicit val materializer = ActorMaterializer(
+      ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+
+    val s = Source(1 to 10)
+    val sinkOnComplete: Sink[Any, NotUsed] = Sink.onComplete(x=>println("Done!"))
+    val r = s.to(sinkOnComplete).run()
+  }
+
+  test("Integrating with Actors"){
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+    import akka.pattern.ask
+
+    val decider: Supervision.Decider = {
+      case e: Exception => Supervision.Resume
+    }
+
+    implicit val system = ActorSystem("SystemForTestingAkkaStreams")
+
+    implicit val materializer = ActorMaterializer(
+      ActorMaterializerSettings(system).withSupervisionStrategy(decider))
+
+
+    object RabbitControlManager {
+      def props = Props(new RabbitControlManager)
+    }
+
+    class RabbitControlManager extends Actor with ActorLogging{
+      def receive = {
+        case x:String => {
+          sender() ! "OK"
+          log.debug(s"Enviando a RabbitMQ: $x")
+        }
+      }
+    }
+
+    object MiActor{
+      case class Go()
+      def props(a:ActorRef) = Props(new MiActor(a))
+    }
+
+    import MiActor._
+
+    class MiActor(rabbitControlManager:ActorRef) extends Actor with ActorLogging{
+
+
+      def source = Source(1 to 10)
+
+      def sink = Sink.onComplete{
+        x => context.system.scheduler.scheduleOnce(1 seconds, self, Go() )
+      }
+
+      def flow = Flow[Int].map(i => s"Elemento: $i")
+
+      implicit val askTimeout = Timeout(5.seconds)
+
+      def construirGrafo = source
+          .via(flow)
+          .mapAsync(parallelism=100)(elem => (rabbitControlManager ? elem).mapTo[String])
+          .to(sink)
+
+      def receive ={
+        case Go() => {
+          log.debug(s"Go recibido!")
+          construirGrafo.run()
+        }
+
+      }
+
+    }
+
+    val rabbitControl = system.actorOf(RabbitControlManager.props, "rabbitControl")
+    val miActor = system.actorOf(MiActor.props(rabbitControl), "miActor")
+
+    miActor ! Go()
+
   }
 
 }
