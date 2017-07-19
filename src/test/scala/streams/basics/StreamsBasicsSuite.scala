@@ -4,7 +4,7 @@ import akka.actor._
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl._
-import akka.util.Timeout
+import akka.util.{ByteString, Timeout}
 import org.scalatest.FunSuite
 
 import scala.concurrent.duration.Duration
@@ -386,7 +386,7 @@ class StreamsBasicsSuite extends FunSuite {
 
       def construirGrafo = source
           .via(flow)
-          .mapAsync(parallelism=100)(elem => (rabbitControlManager ? elem).mapTo[String])
+          .mapAsync(parallelism=5)(elem => (rabbitControlManager ? elem).mapTo[String])
           .to(sink)
 
       def receive ={
